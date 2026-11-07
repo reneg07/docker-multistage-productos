@@ -1,0 +1,32 @@
+# Dependencias y compilaciones locales
+node_modules
+.next
+out
+build
+
+# Control de versiones y metadatos
+.git
+.gitignore
+.dockerignore
+AGENTS.md
+README.md
+
+# Archivos de depuración y logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Entorno y credenciales (evita fugas en la imagen)
+.env*
+!*.env.example
+
+# IDEs y sistemas operativos
+.vscode
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+.DS_Store
+Thumbs.db

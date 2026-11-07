@@ -1,0 +1,116 @@
+services:
+  # ============================================================================
+  # BASE DE DATOS (MySQL 8.0)
+  # ============================================================================
+  database:
+    image: mysql:8.0
+    container_name: productos-database
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-products_db}
+      MYSQL_USER: ${MYSQL_USER:-products_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    expose:
+      - "3306"
+    healthcheck:
+      # Verificación de disponibilidad real mediante consulta SQL sobre TCP
+      # MYSQL_PWD evita exponer contraseñas en CLI o logs y verifica autenticación en la BD
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql --protocol=tcp -h 127.0.0.1 -u $$MYSQL_USER -e 'SELECT 1;' $$MYSQL_DATABASE > /dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - app_network
+
+  # ============================================================================
+  # BACKEND (Laravel 12 / PHP 8.2 / Nginx en Contenedor Único)
+  # ============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: productos-backend:optimized
+    container_name: productos-backend
+    restart: unless-stopped
+    environment:
+      APP_NAME: ${APP_NAME:-Gestión de Productos API}
+      APP_ENV: ${APP_ENV:-production}
+      APP_KEY: ${APP_KEY}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      DB_CONNECTION: mysql
+      DB_HOST: database
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE:-products_db}
+      DB_USERNAME: ${DB_USERNAME:-products_user}
+      DB_PASSWORD: ${DB_PASSWORD}
+      FILESYSTEM_DISK: public
+    volumes:
+      - backend_storage:/var/www/html/storage/app/public
+    expose:
+      - "8000"
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - app_network
+
+  # ============================================================================
+  # FRONTEND (Next.js 16 App Router con next start)
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: productos-frontend:optimized
+    container_name: productos-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      INTERNAL_API_URL: http://backend:8000/api
+      INTERNAL_STORAGE_URL: http://backend:8000/storage
+      NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_STORAGE_URL: /storage
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - app_network
+
+# ==============================================================================
+# VOLÚMENES PERSISTENTES
+# ==============================================================================
+volumes:
+  mysql_data:
+    name: productos_mysql_data
+  backend_storage:
+    name: productos_backend_storage
+
+# ==============================================================================
+# REDES DOCKER
+# ==============================================================================
+networks:
+  app_network:
+    name: productos_app_network
+    driver: bridge
+
